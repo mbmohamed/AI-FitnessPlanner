@@ -6,10 +6,13 @@ here is the first version for my attempt to create a full stack GenAI system tha
 Custom calorie and macro targets based on your goals
 AI-generated meal plans using real USDA food data
 Workout routines tailored to your equipment and experience
+
 ✅ Smart Food Search
 Semantic search: "high protein breakfast foods"
 5,000 curated foods covering all major categories
 Dietary restriction filtering (vegetarian, gluten-free, etc.)
+
+
 ✅ LangGraph AI Workflows
 Multiple AI agents working together
 Profile → Meal Planning → Workout Planning → Coordination

@@ -174,7 +174,106 @@ class ProfileManagementAgent:
     cloudflare_api_token=os.getenv("CLOUD_FLARE_API_TOKEN"),
 )
         
+    def calculate_bmr(self , profile:UserProfile)-> float :
+        if not all([profile.age , profile.height,profile.weight]):
+            return 2000 #default fallback
+        
+        # the bmr formula for an average adult male 
+        #male by default for the choice of gender 
+        #gender female to be added
+        bmr = (10*profile.weight) +(6.25*profile.height)-(5*profile.age)+5
+        return bmr
+
+
+    def claculate_tdee(self,profile:UserProfile)->float:
+        """method to calculate the daily energy based on the level of activity of the user"""
+
+        bmr = self.calculate_bmr(profile)
+
+        activity_multipliers_levels = {
+            "sedentary" : 1.2,
+            "light exercice" : 1.375,
+            "moderate exercice" : 1.55,
+            "active" : 1.725,
+            "very_active" : 1.9,
+        }
+        multiplier = activity_multipliers_levels.get(profile.activity_level,1.375)
+        return bmr*multiplier
     
+    def  calculate_macros(self,profile:UserProfile)->Dict[str,float]:
+        """"calculate the target macros based on the user activity level"""
+        tdee = self.claculate_tdee(profile)
+
+        #adjust the calories based on the goal
+
+        if profile.fitness_goal == "cut":
+            target_calories = tdee*0.8   #deficit of 20% 
+        elif profile.fitness_goal == "bulk":
+            target_calories = tdee*1.1   #surplus of 10%
+        else:
+            target_calories = tdee
+
+        #standards of macros distributions    
+        protein_ratio = 0.30
+        carbs_ratio = 0.40
+        fat_ratio = 0.30
+
+        return{
+            "calories":round(target_calories),
+            "protein" : round((target_calories*protein_ratio)/4),
+            "carbs" : round((target_calories*carbs_ratio)/4),
+            "fats" : round((target_calories*fat_ratio)/9),
+            
+        }
+    
+    async def update_profile(self, profile : UserProfile)->UserProfile:
+        #update the profile stats with calculated values 
+
+        macros = self.calculate_macros(profile)
+
+        profile.target_calories = macros["calories"]
+        profile.target_protein_g = macros["protein"]
+        profile.target_carbs_g = macros["carbs"]
+        profile.target_fat_g = macros["fat"]
+
+        ## store updates in the mongodb db
+        # 
+        # 
+        # 
+        try:
+            client = get_mongo_client()
+            db = client[os.getenv("MONGO_DB_NAME", "usda_nutrition")]
+            profiles = db["user_profiles"]
+
+            profile_dict = profile.model_dump()
+            profiles.update_one(
+                {"user_id": profile.user_id}, {"$set": profile_dict}, upsert=True
+            )
+            client.close()
+
+        except Exception as e:
+            logger.error(f"Error saving profile: {str(e)}")
+
+        return profile
+class MealPlannerAgent : 
+    """generates meal plans according to the profile needs from usda database"""    
+
+    def __init__(self, use_cloud_flare: bool =True , use_full_database : bool = True):
+            self.collection_name = "branded_foods" if use_full_database else "branded_foods_sample"
+
+            if use_cloud_flare:
+                self.llm = ChatCloudflareWorkersAI(
+                model="@cf/meta/llama-3.1-8b-instruct",
+                temperature=0.3,
+                cloudflare_account_id=os.getenv("CF_ACCOUNT_ID"),
+                cloudflare_api_token=os.getenv("CLOUD_FLARE_API_TOKEN"),)
 
 
+    @traceable(name="find_foods_by_citeria")
+    async def find_foods_by_criteria(self,criteria: Dict[str,Any])->List[Dict]:
+        ###find foods by using the Facebook AI similarity search (FAISS) vector search
+        #
+        #
+        #
 
+        
